@@ -1,0 +1,27 @@
+# Email Processing System Requirements
+# Install: pip install -r requirements.txt
+
+# Core
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# PDF Processing (CRITICAL - без этого PDF не парсятся!)
+PyMuPDF>=1.24.0
+
+# Document Processing
+PyPDF2>=3.0.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-pptx>=0.6.0
+docx2txt>=0.8
+pandas>=2.0.0
+
+# Text Processing
+chardet>=5.2.0
+
+# OCR (fallback для PDF-сканов без текстового слоя)
+pytesseract>=0.3.10
+opencv-python>=4.8.0
+
+# Optional but recommended
+# pip install fitz  # alias for PyMuPDF

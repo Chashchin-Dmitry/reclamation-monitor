@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ЭПОТОС — Рекламации</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50:'#eff6ff', 100:'#dbeafe', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a5f' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .log-line { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; }
+        .log-container { scrollbar-width: thin; }
+        .log-container::-webkit-scrollbar { width: 6px; }
+        .log-container::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .stat-card { transition: all 0.2s ease; }
+        .modal-backdrop { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .proc-step { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+        .proc-step .icon { flex-shrink: 0; width: 20px; text-align: center; }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .collapsible-content.open { max-height: 2000px; }
+        .tab-active { border-bottom-color: #2563eb; color: #2563eb; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-brand-900 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-brand-600 rounded-lg flex items-center justify-center font-bold text-lg">E</div>
+                <div>
+                    <h1 class="text-xl font-bold">ЭПОТОС — Система рекламаций</h1>
+                    <p class="text-brand-100 text-sm">Мониторинг и управление</p>
+                </div>
+            </div>
+            <div id="status-badges" class="flex items-center gap-3">
+                <span id="badge-service" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-700">Сервис: ...</span>
+                <span id="badge-ollama" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-700">Ollama: ...</span>
+                <span id="badge-ws" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-700">Live: ...</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- Row 1: Process + Stats -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Process Card -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Запуск обработки</h2>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-1">Дата обработки</label>
+                        <input type="date" id="process-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" />
+                    </div>
+                    <button id="btn-process" onclick="startProcess()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Обработать
+                    </button>
+                    <div id="process-status" class="hidden text-sm text-gray-600 bg-gray-50 rounded-lg p-3"></div>
+                </div>
+
+                <!-- Tasks -->
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Последние задачи</h3>
+                    <div id="tasks-list" class="space-y-2 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="stat-card bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-sm text-gray-500">Писем обработано</p>
+                    <p id="stat-emails" class="text-3xl font-bold text-gray-900 mt-1">—</p>
+                    <p id="stat-period-emails" class="text-xs text-gray-400 mt-1">за 30 дней</p>
+                </div>
+                <div class="stat-card bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-sm text-gray-500">Рекламаций</p>
+                    <p id="stat-reclamations" class="text-3xl font-bold text-red-600 mt-1">—</p>
+                    <p id="stat-period-recl" class="text-xs text-gray-400 mt-1">за 30 дней</p>
+                </div>
+                <div class="stat-card bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-sm text-gray-500">Blacklist</p>
+                    <p id="stat-blacklist" class="text-3xl font-bold text-gray-400 mt-1">—</p>
+                    <p id="stat-period-bl" class="text-xs text-gray-400 mt-1">за 30 дней</p>
+                </div>
+                <div class="stat-card bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-sm text-gray-500">Ошибки</p>
+                    <p id="stat-errors" class="text-3xl font-bold text-amber-500 mt-1">—</p>
+                    <p id="stat-period-err" class="text-xs text-gray-400 mt-1">за 30 дней</p>
+                </div>
+
+                <!-- Categories -->
+                <div class="sm:col-span-4 bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="text-sm font-medium text-gray-700 mb-3">По категориям</h3>
+                    <div id="categories-bar" class="flex gap-2 flex-wrap"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Tabs -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="border-b border-gray-200">
+                <nav class="flex overflow-x-auto">
+                    <button onclick="switchTab('reclamations')" id="tab-reclamations" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-brand-600 text-brand-600 whitespace-nowrap">Рекламации</button>
+                    <button onclick="switchTab('all-emails')" id="tab-all-emails" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 whitespace-nowrap">Все письма</button>
+                    <button onclick="switchTab('logs')" id="tab-logs" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 whitespace-nowrap">Live логи</button>
+                    <button onclick="switchTab('history')" id="tab-history" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 whitespace-nowrap">История запусков</button>
+                    <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 whitespace-nowrap">Настройки</button>
+                </nav>
+            </div>
+
+            <!-- Tab: Reclamations -->
+            <div id="panel-reclamations" class="tab-panel p-4">
+                <div class="flex items-center gap-3 mb-4 flex-wrap">
+                    <select id="filter-category" onchange="loadReclamations()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="">Все категории</option>
+                        <option value="Наземка">Наземка</option>
+                        <option value="Метро">Метро</option>
+                        <option value="Спецтехника">Спецтехника</option>
+                        <option value="ЖДТ">ЖДТ</option>
+                    </select>
+
+                    <div class="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-1.5 bg-white">
+                        <span class="text-xs text-gray-500 font-medium">С</span>
+                        <input type="date" id="filter-from" onchange="loadReclamations()" class="text-sm border-none outline-none bg-transparent w-[130px]" />
+                        <span class="text-gray-300">|</span>
+                        <span class="text-xs text-gray-500 font-medium">По</span>
+                        <input type="date" id="filter-to" onchange="loadReclamations()" class="text-sm border-none outline-none bg-transparent w-[130px]" />
+                    </div>
+
+                    <div class="flex gap-1">
+                        <button onclick="setDateRange(7)" class="px-2.5 py-1.5 text-xs rounded-md border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors">7д</button>
+                        <button onclick="setDateRange(30)" class="px-2.5 py-1.5 text-xs rounded-md border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors">30д</button>
+                        <button onclick="setDateRange(90)" class="px-2.5 py-1.5 text-xs rounded-md border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors">90д</button>
+                        <button onclick="setDateRange(0)" class="px-2.5 py-1.5 text-xs rounded-md border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors">Все</button>
+                    </div>
+
+                    <span id="recl-count" class="text-sm text-gray-500 ml-auto"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-gray-500 border-b border-gray-200">
+                                <th class="pb-3 pr-4 font-medium">Bitrix</th>
+                                <th class="pb-3 pr-4 font-medium">Продукт</th>
+                                <th class="pb-3 pr-4 font-medium">Организация</th>
+                                <th class="pb-3 pr-4 font-medium">Категория</th>
+                                <th class="pb-3 pr-4 font-medium">Серьёзность</th>
+                                <th class="pb-3 pr-4 font-medium">Проблема</th>
+                                <th class="pb-3 font-medium">Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recl-table" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div id="recl-empty" class="hidden py-12 text-center text-gray-400">
+                    <p class="text-lg">Нет рекламаций</p>
+                    <p class="text-sm mt-1">Запустите обработку или измените фильтры</p>
+                </div>
+            </div>
+
+            <!-- Tab: All Emails -->
+            <div id="panel-all-emails" class="tab-panel hidden p-4">
+                <div class="flex items-center gap-3 mb-4 flex-wrap">
+                    <div class="relative flex-1 max-w-md">
+                        <input type="text" id="email-search" placeholder="Поиск по теме, отправителю, тексту..."
+                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                            onkeydown="if(event.key==='Enter') loadAllEmails()" />
+                        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <button onclick="loadAllEmails()" class="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors">Найти</button>
+                    <select id="email-filter-recl" onchange="loadAllEmails()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="">Все письма</option>
+                        <option value="1">Только рекламации</option>
+                        <option value="0">Не рекламации</option>
+                    </select>
+                    <span id="emails-count" class="text-sm text-gray-500 ml-auto"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-gray-500 border-b border-gray-200">
+                                <th class="pb-3 pr-4 font-medium">ID</th>
+                                <th class="pb-3 pr-4 font-medium">Тема</th>
+                                <th class="pb-3 pr-4 font-medium">Отправитель</th>
+                                <th class="pb-3 pr-4 font-medium">Рекламация?</th>
+                                <th class="pb-3 pr-4 font-medium">Blacklist?</th>
+                                <th class="pb-3 pr-4 font-medium">Категория</th>
+                                <th class="pb-3 font-medium">Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody id="emails-table" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div id="emails-empty" class="hidden py-12 text-center text-gray-400">
+                    <p>Нет писем</p>
+                </div>
+            </div>
+
+            <!-- Tab: Logs -->
+            <div id="panel-logs" class="tab-panel hidden">
+                <div class="bg-gray-900 rounded-b-xl p-4 log-container" style="height: 500px; overflow-y: auto;" id="log-container">
+                    <div id="log-lines" class="space-y-0.5"></div>
+                </div>
+            </div>
+
+            <!-- Tab: History -->
+            <div id="panel-history" class="tab-panel p-4 hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-500 border-b border-gray-200">
+                            <th class="pb-3 pr-4 font-medium">Дата</th>
+                            <th class="pb-3 pr-4 font-medium">Статус</th>
+                            <th class="pb-3 pr-4 font-medium">Писем</th>
+                            <th class="pb-3 pr-4 font-medium">Рекламаций</th>
+                            <th class="pb-3 pr-4 font-medium">Blacklist</th>
+                            <th class="pb-3 pr-4 font-medium">Ошибки</th>
+                            <th class="pb-3 font-medium">Время</th>
+                        </tr>
+                    </thead>
+                    <tbody id="runs-table" class="divide-y divide-gray-100"></tbody>
+                </table>
+                <div id="runs-empty" class="hidden py-12 text-center text-gray-400">
+                    <p>Нет истории запусков</p>
+                </div>
+            </div>
+
+            <!-- Tab: Settings -->
+            <div id="panel-settings" class="tab-panel hidden p-4 space-y-6">
+                <!-- LLaMA Prompt -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">Промпт LLaMA (анализ документов)</h3>
+                    <textarea id="settings-prompt" rows="12" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" placeholder="Загрузка..."></textarea>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="savePrompt()" class="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors">Сохранить промпт</button>
+                        <span id="prompt-status" class="text-sm text-gray-500 self-center"></span>
+                    </div>
+                </div>
+
+                <!-- System Prompt -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">System Prompt LLaMA</h3>
+                    <textarea id="settings-system-prompt" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" placeholder="Загрузка..."></textarea>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="saveSystemPrompt()" class="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors">Сохранить system prompt</button>
+                        <span id="system-prompt-status" class="text-sm text-gray-500 self-center"></span>
+                    </div>
+                </div>
+
+                <!-- Blacklist -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">Blacklist (ключевые слова)</h3>
+                    <textarea id="settings-blacklist" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" placeholder="Загрузка..."></textarea>
+                    <p class="text-xs text-gray-400 mt-1">Одно слово/фраза на строку. Письма с этими словами в теме пропускаются.</p>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="saveBlacklist()" class="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors">Сохранить blacklist</button>
+                        <span id="blacklist-status" class="text-sm text-gray-500 self-center"></span>
+                    </div>
+                </div>
+
+                <!-- Category Keywords -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">Ключевые слова категорий</h3>
+                    <p class="text-xs text-gray-400 mb-2">Слова/фразы для автоматического определения категории. Формат: JSON объект. Категории: Наземка, Метро, Спецтехника, ЖДТ.</p>
+                    <textarea id="settings-categories" rows="10" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" placeholder="Загрузка..."></textarea>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="saveCategories()" class="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors">Сохранить категории</button>
+                        <span id="categories-status" class="text-sm text-gray-500 self-center"></span>
+                    </div>
+                </div>
+
+                <!-- Bitrix Field Mapping (read-only) -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">Маппинг полей Bitrix24</h3>
+                    <div class="overflow-x-auto max-h-[400px] overflow-y-auto border border-gray-200 rounded-lg">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr class="text-left text-gray-500">
+                                    <th class="px-4 py-2 font-medium">Наше имя</th>
+                                    <th class="px-4 py-2 font-medium">PROPERTY_ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mapping-table" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Email Detail Modal -->
+    <div id="email-modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-backdrop absolute inset-0" onclick="closeModal()"></div>
+        <div class="relative mx-auto mt-10 mb-10 max-w-4xl max-h-[calc(100vh-80px)] overflow-y-auto bg-white rounded-2xl shadow-2xl">
+            <div id="modal-content" class="p-6">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-gray-400">
+        ЭПОТОС &copy; 2026 &mdash; Система автоматической обработки рекламаций
+    </footer>
+
+<script>
+const API = '';
+let ws = null;
+let autoScroll = true;
+
+// ========== INIT ==========
+
+document.addEventListener('DOMContentLoaded', () => {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('process-date').value = today;
+
+    loadStatus();
+    loadStats();
+    loadReclamations();
+    loadTasks();
+    connectWS();
+
+    setInterval(loadStatus, 30000);
+    setInterval(loadStats, 60000);
+    setInterval(loadTasks, 10000);
+});
+
+// ========== STATUS ==========
+
+async function loadStatus() {
+    try {
+        const r = await fetch(`${API}/api/status`);
+        const d = await r.json();
+
+        const ob = document.getElementById('badge-ollama');
+        if (d.ollama.ok) {
+            ob.textContent = `Ollama: ${d.ollama.model || 'OK'}`;
+            ob.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300';
+        } else {
+            ob.textContent = 'Ollama: OFF';
+            ob.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-900/50 text-red-300';
+        }
+
+        const sb = document.getElementById('badge-service');
+        const running = d.service.status && d.service.status.includes('SERVICE_RUNNING');
+        sb.textContent = `Сервис: ${running ? 'ON' : 'OFF'}`;
+        sb.className = `px-3 py-1 rounded-full text-xs font-medium ${running ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`;
+    } catch(e) {
+        console.error('Status error:', e);
+    }
+}
+
+// ========== STATS ==========
+
+async function loadStats() {
+    try {
+        const statsDays = 30;
+        const r = await fetch(`${API}/api/stats?days=${statsDays}`);
+        const d = await r.json();
+
+        document.getElementById('stat-emails').textContent = d.total_emails || 0;
+        document.getElementById('stat-reclamations').textContent = d.total_reclamations || 0;
+        document.getElementById('stat-blacklist').textContent = d.total_blacklisted || 0;
+        document.getElementById('stat-errors').textContent = d.total_errors || 0;
+
+        const periodText = `за ${statsDays} дней`;
+        document.getElementById('stat-period-emails').textContent = periodText;
+        document.getElementById('stat-period-recl').textContent = periodText;
+        document.getElementById('stat-period-bl').textContent = periodText;
+        document.getElementById('stat-period-err').textContent = periodText;
+
+        const bar = document.getElementById('categories-bar');
+        if (d.categories && d.categories.length > 0) {
+            const colors = { 'Наземка': 'bg-blue-100 text-blue-700', 'Метро': 'bg-purple-100 text-purple-700', 'Спецтехника': 'bg-orange-100 text-orange-700', 'ЖДТ': 'bg-green-100 text-green-700' };
+            bar.innerHTML = d.categories.map(c =>
+                `<span class="px-3 py-1.5 rounded-lg text-sm font-medium ${colors[c.category] || 'bg-gray-100 text-gray-700'}">${c.category}: ${c.cnt}</span>`
+            ).join('');
+        } else {
+            bar.innerHTML = '<span class="text-gray-400 text-sm">Нет данных</span>';
+        }
+    } catch(e) {
+        console.error('Stats error:', e);
+    }
+}
+
+// ========== RECLAMATIONS ==========
+
+async function loadReclamations() {
+    try {
+        const cat = document.getElementById('filter-category').value;
+        const from = document.getElementById('filter-from').value;
+        const to = document.getElementById('filter-to').value;
+
+        let url = `${API}/api/reclamations?limit=50`;
+        if (cat) url += `&category=${encodeURIComponent(cat)}`;
+        if (from) url += `&date_from=${from}`;
+        if (to) url += `&date_to=${to}`;
+
+        const r = await fetch(url);
+        const d = await r.json();
+
+        const table = document.getElementById('recl-table');
+        const empty = document.getElementById('recl-empty');
+        const count = document.getElementById('recl-count');
+
+        count.textContent = `${d.items.length} из ${d.total}`;
+
+        if (d.items.length === 0) {
+            table.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+
+        const sevColors = {
+            'критическая': 'bg-red-100 text-red-700',
+            'высокая': 'bg-orange-100 text-orange-700',
+            'средняя': 'bg-yellow-100 text-yellow-700',
+            'низкая': 'bg-green-100 text-green-700',
+        };
+        const catColors = {
+            'Наземка': 'bg-blue-100 text-blue-700',
+            'Метро': 'bg-purple-100 text-purple-700',
+            'Спецтехника': 'bg-orange-100 text-orange-700',
+            'ЖДТ': 'bg-green-100 text-green-700',
+        };
+
+        table.innerHTML = d.items.map(r => `
+            <tr class="hover:bg-gray-50 fade-in cursor-pointer" onclick="openEmailDetail('${esc(r.email_id)}')">
+                <td class="py-3 pr-4">${r.bitrix_id ? `<a href="https://your_company.bitrix24.ru/bizproc/processes/IBLOCK_ID/element/0/${r.bitrix_id}/" target="_blank" class="text-brand-600 hover:underline font-medium" onclick="event.stopPropagation()">#${r.bitrix_id}</a>` : '<span class="text-gray-400">—</span>'}</td>
+                <td class="py-3 pr-4 font-medium text-gray-900 max-w-[200px] truncate" title="${esc(r.product_name)}">${esc(r.product_name || '—')}</td>
+                <td class="py-3 pr-4 text-gray-600 max-w-[180px] truncate" title="${esc(r.customer_name)}">${esc(r.customer_name || '—')}</td>
+                <td class="py-3 pr-4"><span class="px-2 py-0.5 rounded text-xs font-medium ${catColors[r.category] || 'bg-gray-100 text-gray-600'}">${esc(r.category || '—')}</span></td>
+                <td class="py-3 pr-4"><span class="px-2 py-0.5 rounded text-xs font-medium ${sevColors[(r.severity||'').toLowerCase()] || 'bg-gray-100 text-gray-600'}">${esc(r.severity || '—')}</span></td>
+                <td class="py-3 pr-4 text-gray-600 max-w-[250px] truncate" title="${esc(r.issue_description)}">${esc(r.issue_description || '—')}</td>
+                <td class="py-3 text-gray-500 text-xs whitespace-nowrap">${r.created_at ? r.created_at.slice(0,16) : '—'}</td>
+            </tr>
+        `).join('');
+    } catch(e) {
+        console.error('Reclamations error:', e);
+    }
+}
+
+// ========== ALL EMAILS ==========
+
+async function loadAllEmails() {
+    try {
+        const search = document.getElementById('email-search').value;
+        const reclFilter = document.getElementById('email-filter-recl').value;
+
+        let url = `${API}/api/emails?limit=50`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (reclFilter !== '') url += `&is_reclamation=${reclFilter === '1' ? 'true' : 'false'}`;
+
+        const r = await fetch(url);
+        const d = await r.json();
+
+        const table = document.getElementById('emails-table');
+        const empty = document.getElementById('emails-empty');
+        const count = document.getElementById('emails-count');
+
+        const items = d.items || d;
+        const total = d.total || items.length;
+        count.textContent = `${items.length} из ${total}`;
+
+        if (items.length === 0) {
+            table.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+
+        table.innerHTML = items.map(e => `
+            <tr class="hover:bg-gray-50 cursor-pointer fade-in" onclick="openEmailDetail('${esc(e.email_id)}')">
+                <td class="py-3 pr-4 text-gray-500 text-xs">${esc(e.email_id)}</td>
+                <td class="py-3 pr-4 font-medium text-gray-900 max-w-[300px] truncate" title="${esc(e.subject)}">${esc(e.subject || '—')}</td>
+                <td class="py-3 pr-4 text-gray-600 max-w-[200px] truncate">${esc(e.sender || '—')}</td>
+                <td class="py-3 pr-4">${e.is_reclamation ? '<span class="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">Да</span>' : '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">Нет</span>'}</td>
+                <td class="py-3 pr-4">${e.is_blacklisted ? '<span class="px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-medium">Да</span>' : '<span class="text-gray-400 text-xs">—</span>'}</td>
+                <td class="py-3 pr-4 text-gray-600">${esc(e.category || '—')}</td>
+                <td class="py-3 text-gray-500 text-xs whitespace-nowrap">${e.processed_at ? e.processed_at.slice(0,16) : '—'}</td>
+            </tr>
+        `).join('');
+    } catch(e) {
+        console.error('All emails error:', e);
+    }
+}
+
+// ========== EMAIL DETAIL MODAL ==========
+
+async function openEmailDetail(emailId) {
+    const modal = document.getElementById('email-modal');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = '<div class="flex justify-center py-12"><div class="animate-spin w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full"></div></div>';
+    modal.classList.remove('hidden');
+
+    try {
+        const r = await fetch(`${API}/api/email/${emailId}`);
+        if (!r.ok) {
+            content.innerHTML = `<p class="text-red-500">Письмо не найдено (${r.status})</p>`;
+            return;
+        }
+        const d = await r.json();
+
+        const isRecl = d.is_reclamation;
+        const reclamations = d.reclamations || [];
+        const attachments = d.attachments_json_parsed || [];
+        const llama = d.llama_result_json_parsed || {};
+        const procLog = d.processing_log || '';
+
+        let html = `
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900">#${esc(d.email_id)} — ${esc(d.subject || 'Без темы')}</h2>
+                    <div class="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                        <span>От: <strong>${esc(d.sender || '—')}</strong></span>
+                        <span>Дата: ${d.received_date || '—'}</span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2">
+                        ${isRecl
+                            ? '<span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-medium">Рекламация</span>'
+                            : '<span class="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-medium">Не рекламация</span>'}
+                        ${d.is_blacklisted ? '<span class="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-sm font-medium">Blacklist</span>' : ''}
+                        ${d.category ? `<span class="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">${esc(d.category)}</span>` : ''}
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>`;
+
+        // Processing log
+        if (procLog) {
+            const lines = procLog.split('\n').filter(l => l.trim());
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Цепочка обработки</h3>
+                <div class="bg-gray-50 rounded-lg p-3 space-y-1">
+                    ${lines.map(line => {
+                        const isOk = !line.toLowerCase().includes('ошибка') && !line.toLowerCase().includes('error');
+                        return `<div class="proc-step">
+                            <span class="icon ${isOk ? 'text-green-500' : 'text-red-500'}">${isOk ? '&#10003;' : '&#10007;'}</span>
+                            <span class="text-sm text-gray-700 font-mono">${esc(line)}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }
+
+        // Reasoning (why reclamation or not)
+        const reasoning = llama.reasoning || '';
+        if (reasoning) {
+            const rLines = reasoning.split('\n').filter(l => l.trim());
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Почему ${isRecl ? 'рекламация' : 'НЕ рекламация'}</h3>
+                <div class="bg-${isRecl ? 'red' : 'green'}-50 rounded-lg p-3 space-y-1">
+                    ${rLines.map(line => `<div class="text-sm text-gray-700 font-mono">${esc(line)}</div>`).join('')}
+                </div>
+            </div>`;
+        }
+
+        // Reclamations / Products
+        if (reclamations.length > 0) {
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Продукты (${reclamations.length})</h3>
+                <div class="space-y-2">
+                    ${reclamations.map((rec, i) => `
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <div class="flex items-center gap-3">
+                                <span class="text-sm font-medium text-gray-900">${i+1}. ${esc(rec.product_name || '—')}</span>
+                                ${rec.serial_number && rec.serial_number !== 'n/a' ? `<span class="text-xs text-gray-500">SN: ${esc(rec.serial_number)}</span>` : ''}
+                                ${rec.bitrix_id ? `<a href="https://your_company.bitrix24.ru/bizproc/processes/IBLOCK_ID/element/0/${rec.bitrix_id}/" target="_blank" class="text-xs text-brand-600 hover:underline ml-auto">Bitrix #${rec.bitrix_id}</a>` : ''}
+                            </div>
+                            ${rec.issue_description && rec.issue_description !== 'n/a' ? `<p class="text-sm text-gray-600 mt-1">${esc(rec.issue_description)}</p>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+        }
+
+        // Attachments
+        if (attachments.length > 0) {
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Файлы (${attachments.length})</h3>
+                <div class="space-y-1">
+                    ${attachments.map(a => {
+                        const size = a.size ? (a.size > 1024*1024 ? (a.size/1024/1024).toFixed(1) + ' MB' : (a.size/1024).toFixed(0) + ' KB') : '—';
+                        const icon = (a.content_type || '').startsWith('image/') ? '&#128247;' : '&#128196;';
+                        return `<div class="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-50">
+                            <span>${icon}</span>
+                            <span class="text-sm text-gray-700">${esc(a.filename || 'файл')}</span>
+                            <span class="text-xs text-gray-400">(${size})</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }
+
+        // Cloud links
+        if (d.cloud_links) {
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Ссылки на облако</h3>
+                <div class="text-sm text-gray-600">${d.cloud_links}</div>
+            </div>`;
+        }
+
+        // Body text (collapsible)
+        if (d.body_text) {
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2 cursor-pointer select-none" onclick="this.nextElementSibling.classList.toggle('open')">
+                    &#9660; Сырой текст письма
+                </h3>
+                <div class="collapsible-content">
+                    <pre class="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 whitespace-pre-wrap max-h-[300px] overflow-y-auto">${esc(d.body_text)}</pre>
+                </div>
+            </div>`;
+        }
+
+        // LLaMA result (collapsible)
+        if (llama && Object.keys(llama).length > 0) {
+            html += `
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2 cursor-pointer select-none" onclick="this.nextElementSibling.classList.toggle('open')">
+                    &#9660; Результат LLaMA (JSON)
+                </h3>
+                <div class="collapsible-content">
+                    <pre class="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 whitespace-pre-wrap max-h-[300px] overflow-y-auto">${esc(JSON.stringify(llama, null, 2))}</pre>
+                </div>
+            </div>`;
+        }
+
+        // Reprocess button
+        html += `
+            <div class="border-t border-gray-200 pt-4 mt-4 flex items-center gap-3">
+                <button onclick="reprocessEmail('${esc(d.email_id)}')" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg transition-colors">
+                    Переобработать это письмо
+                </button>
+                <span id="reprocess-status" class="text-sm text-gray-500"></span>
+            </div>`;
+
+        content.innerHTML = html;
+    } catch(e) {
+        content.innerHTML = `<p class="text-red-500">Ошибка загрузки: ${e.message}</p>`;
+    }
+}
+
+function closeModal() {
+    document.getElementById('email-modal').classList.add('hidden');
+}
+
+// Close modal on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ========== REPROCESS ==========
+
+async function reprocessEmail(emailId) {
+    const status = document.getElementById('reprocess-status');
+    status.textContent = 'Запуск переобработки...';
+    try {
+        const r = await fetch(`${API}/api/reprocess`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email_id: emailId})
+        });
+        const d = await r.json();
+        if (r.ok) {
+            status.innerHTML = '<span class="text-green-600">Переобработка запущена. Следите в Live логах.</span>';
+        } else {
+            status.innerHTML = `<span class="text-red-600">${d.error || 'Ошибка'}</span>`;
+        }
+    } catch(e) {
+        status.innerHTML = `<span class="text-red-600">${e.message}</span>`;
+    }
+}
+
+// ========== TASKS ==========
+
+async function loadTasks() {
+    try {
+        const r = await fetch(`${API}/api/tasks`);
+        const tasks = await r.json();
+        const list = document.getElementById('tasks-list');
+
+        if (tasks.length === 0) {
+            list.innerHTML = '<p class="text-gray-400 text-xs">Нет задач</p>';
+            return;
+        }
+
+        const statusIcons = { pending: '&#9711;', running: '<span class="pulse-dot text-blue-500">&#9679;</span>', done: '<span class="text-green-500">&#10003;</span>', error: '<span class="text-red-500">&#10007;</span>' };
+        const statusColors = { pending: 'text-gray-500', running: 'text-blue-600', done: 'text-green-600', error: 'text-red-600' };
+
+        list.innerHTML = tasks.slice(0, 5).map(t => `
+            <div class="flex items-center gap-2 py-1.5 ${statusColors[t.status] || ''}">
+                <span>${statusIcons[t.status] || '?'}</span>
+                <span class="font-medium">${t.target_date}</span>
+                <span class="text-xs text-gray-400 ml-auto">
+                    ${t.status === 'done' ? `${t.reclamations_found || 0} рекл.` : t.status === 'error' ? 'ошибка' : t.status === 'running' ? 'выполняется...' : 'ожидает'}
+                </span>
+            </div>
+        `).join('');
+    } catch(e) {
+        console.error('Tasks error:', e);
+    }
+}
+
+// ========== PROCESS ==========
+
+async function startProcess() {
+    const dateInput = document.getElementById('process-date');
+    const date = dateInput.value;
+    if (!date) { alert('Выберите дату'); return; }
+
+    const d = new Date(date);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const formatted = `${String(d.getDate()).padStart(2,'0')}-${months[d.getMonth()]}-${d.getFullYear()}`;
+
+    const btn = document.getElementById('btn-process');
+    const status = document.getElementById('process-status');
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Обработка...';
+    btn.className = 'w-full bg-gray-400 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed';
+
+    status.classList.remove('hidden');
+    status.textContent = `Запуск обработки за ${formatted}...`;
+
+    try {
+        const r = await fetch(`${API}/api/process`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({date: formatted})
+        });
+        const data = await r.json();
+
+        if (r.ok) {
+            status.innerHTML = `<span class="text-green-600">Задача #${data.task_id} запущена. Следите в Live логах.</span>`;
+            switchTab('logs');
+        } else {
+            status.innerHTML = `<span class="text-red-600">${data.error || 'Ошибка'}</span>`;
+        }
+    } catch(e) {
+        status.innerHTML = `<span class="text-red-600">Ошибка подключения: ${e.message}</span>`;
+    }
+
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Обработать';
+        btn.className = 'w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2';
+    }, 5000);
+
+    loadTasks();
+}
+
+// ========== RUNS ==========
+
+async function loadRuns() {
+    try {
+        const r = await fetch(`${API}/api/runs`);
+        const runs = await r.json();
+        const table = document.getElementById('runs-table');
+        const empty = document.getElementById('runs-empty');
+
+        if (runs.length === 0) {
+            table.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+
+        const statusBadge = s => {
+            if (s === 'done') return '<span class="px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">OK</span>';
+            if (s === 'running') return '<span class="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium pulse-dot">Running</span>';
+            if (s === 'error') return '<span class="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">Error</span>';
+            return `<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">${s}</span>`;
+        };
+
+        table.innerHTML = runs.map(r => `
+            <tr class="hover:bg-gray-50">
+                <td class="py-3 pr-4 font-medium">${r.run_date}</td>
+                <td class="py-3 pr-4">${statusBadge(r.status)}</td>
+                <td class="py-3 pr-4">${r.total_emails ?? '—'}</td>
+                <td class="py-3 pr-4 ${r.reclamations_found > 0 ? 'text-red-600 font-medium' : ''}">${r.reclamations_found ?? '—'}</td>
+                <td class="py-3 pr-4 text-gray-500">${r.blacklisted ?? '—'}</td>
+                <td class="py-3 pr-4 ${r.errors > 0 ? 'text-amber-600' : 'text-gray-500'}">${r.errors ?? '—'}</td>
+                <td class="py-3 text-gray-500 text-xs">${r.duration ? r.duration.toFixed(1) + 's' : '—'}</td>
+            </tr>
+        `).join('');
+    } catch(e) {
+        console.error('Runs error:', e);
+    }
+}
+
+// ========== SETTINGS ==========
+
+async function loadSettings() {
+    try {
+        const r = await fetch(`${API}/api/settings`);
+        const d = await r.json();
+
+        // Prompt
+        document.getElementById('settings-prompt').value = d.settings.llama_prompt || '';
+        document.getElementById('settings-system-prompt').value = d.settings.llama_system_prompt || '';
+
+        // Blacklist
+        const bl = d.classifier_config.blacklist_keywords || [];
+        document.getElementById('settings-blacklist').value = bl.join('\n');
+
+        // Category keywords
+        const catKw = d.classifier_config.keywords_for_categories || {};
+        document.getElementById('settings-categories').value = JSON.stringify(catKw, null, 2);
+
+        // Mapping
+        const mapping = d.field_mapping || {};
+        const table = document.getElementById('mapping-table');
+        const entries = Object.entries(mapping).sort((a,b) => a[0].localeCompare(b[0]));
+        table.innerHTML = entries.map(([name, pid]) => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-2 text-gray-800 text-sm">${esc(name)}</td>
+                <td class="px-4 py-2 text-gray-500 text-sm font-mono">${esc(String(pid))}</td>
+            </tr>
+        `).join('');
+    } catch(e) {
+        console.error('Settings error:', e);
+    }
+}
+
+async function savePrompt() {
+    const value = document.getElementById('settings-prompt').value;
+    const status = document.getElementById('prompt-status');
+    try {
+        const r = await fetch(`${API}/api/settings`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key: 'llama_prompt', value})
+        });
+        if (r.ok) {
+            status.innerHTML = '<span class="text-green-600">Сохранено!</span>';
+        } else {
+            status.innerHTML = '<span class="text-red-600">Ошибка сохранения</span>';
+        }
+    } catch(e) {
+        status.innerHTML = `<span class="text-red-600">${e.message}</span>`;
+    }
+    setTimeout(() => status.textContent = '', 3000);
+}
+
+async function saveSystemPrompt() {
+    const value = document.getElementById('settings-system-prompt').value;
+    const status = document.getElementById('system-prompt-status');
+    try {
+        const r = await fetch(`${API}/api/settings`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key: 'llama_system_prompt', value})
+        });
+        if (r.ok) {
+            status.innerHTML = '<span class="text-green-600">Сохранено!</span>';
+        } else {
+            status.innerHTML = '<span class="text-red-600">Ошибка сохранения</span>';
+        }
+    } catch(e) {
+        status.innerHTML = `<span class="text-red-600">${e.message}</span>`;
+    }
+    setTimeout(() => status.textContent = '', 3000);
+}
+
+async function saveBlacklist() {
+    const text = document.getElementById('settings-blacklist').value;
+    const keywords = text.split('\n').map(s => s.trim()).filter(Boolean);
+    const status = document.getElementById('blacklist-status');
+    try {
+        // Read current config, update blacklist, write back
+        const r1 = await fetch(`${API}/api/settings`);
+        const d = await r1.json();
+        const config = d.classifier_config || {};
+        config.blacklist_keywords = keywords;
+
+        const r2 = await fetch(`${API}/api/settings`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key: 'classifier_config', value: config})
+        });
+        if (r2.ok) {
+            status.innerHTML = `<span class="text-green-600">Сохранено (${keywords.length} слов)!</span>`;
+        } else {
+            status.innerHTML = '<span class="text-red-600">Ошибка сохранения</span>';
+        }
+    } catch(e) {
+        status.innerHTML = `<span class="text-red-600">${e.message}</span>`;
+    }
+    setTimeout(() => status.textContent = '', 3000);
+}
+
+async function saveCategories() {
+    const text = document.getElementById('settings-categories').value;
+    const status = document.getElementById('categories-status');
+    try {
+        // Validate JSON
+        const parsed = JSON.parse(text);
+
+        // Read current config, update categories, write back
+        const r1 = await fetch(`${API}/api/settings`);
+        const d = await r1.json();
+        const config = d.classifier_config || {};
+        config.keywords_for_categories = parsed;
+
+        const r2 = await fetch(`${API}/api/settings`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key: 'classifier_config', value: config})
+        });
+        if (r2.ok) {
+            status.innerHTML = '<span class="text-green-600">Сохранено!</span>';
+        } else {
+            status.innerHTML = '<span class="text-red-600">Ошибка сохранения</span>';
+        }
+    } catch(e) {
+        if (e instanceof SyntaxError) {
+            status.innerHTML = '<span class="text-red-600">Невалидный JSON</span>';
+        } else {
+            status.innerHTML = `<span class="text-red-600">${e.message}</span>`;
+        }
+    }
+    setTimeout(() => status.textContent = '', 3000);
+}
+
+// ========== TABS ==========
+
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('border-brand-600', 'text-brand-600');
+        b.classList.add('border-transparent', 'text-gray-500');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+
+    const btn = document.getElementById(`tab-${name}`);
+    btn.classList.add('border-brand-600', 'text-brand-600');
+    btn.classList.remove('border-transparent', 'text-gray-500');
+    document.getElementById(`panel-${name}`).classList.remove('hidden');
+
+    if (name === 'history') loadRuns();
+    if (name === 'reclamations') loadReclamations();
+    if (name === 'all-emails') loadAllEmails();
+    if (name === 'settings') loadSettings();
+}
+
+// ========== WEBSOCKET ==========
+
+function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${proto}//${location.host}/ws/logs`;
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        const b = document.getElementById('badge-ws');
+        b.textContent = 'Live: ON';
+        b.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300';
+    };
+
+    ws.onclose = () => {
+        const b = document.getElementById('badge-ws');
+        b.textContent = 'Live: OFF';
+        b.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-900/50 text-red-300';
+        setTimeout(connectWS, 3000);
+    };
+
+    ws.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+
+            if (msg.type === 'ping') return;
+
+            if (msg.type === 'log') {
+                addLogLine(msg.text, msg.historical);
+            }
+
+            if (msg.type === 'task_start') {
+                const status = document.getElementById('process-status');
+                status.classList.remove('hidden');
+                status.innerHTML = `<span class="text-blue-600">Обработка ${msg.date} запущена...</span>`;
+            }
+
+            if (msg.type === 'task_done') {
+                const status = document.getElementById('process-status');
+                status.innerHTML = `<span class="text-green-600">Готово: ${msg.total} писем, ${msg.reclamations} рекламаций</span>`;
+                loadStats();
+                loadReclamations();
+                loadTasks();
+            }
+
+            if (msg.type === 'task_error') {
+                const status = document.getElementById('process-status');
+                status.innerHTML = `<span class="text-red-600">Ошибка: ${msg.error}</span>`;
+                loadTasks();
+            }
+
+            if (msg.type === 'reprocess_done') {
+                const rs = document.getElementById('reprocess-status');
+                if (rs) rs.innerHTML = `<span class="text-green-600">Переобработка завершена (is_reclamation=${msg.is_reclamation})</span>`;
+                loadAllEmails();
+                loadReclamations();
+                loadStats();
+            }
+
+            if (msg.type === 'reprocess_error') {
+                const rs = document.getElementById('reprocess-status');
+                if (rs) rs.innerHTML = `<span class="text-red-600">Ошибка: ${msg.error}</span>`;
+            }
+        } catch(err) {}
+    };
+}
+
+function addLogLine(text, historical) {
+    const container = document.getElementById('log-lines');
+    const div = document.createElement('div');
+    div.className = 'log-line';
+
+    let color = 'text-gray-400';
+    if (text.includes('ERROR') || text.includes('CRITICAL')) color = 'text-red-400';
+    else if (text.includes('WARNING')) color = 'text-yellow-400';
+    else if (text.includes('INFO')) color = 'text-green-400';
+    else if (text.includes('[PARALLEL]')) color = 'text-blue-400';
+    else if (text.includes('[MERGE]')) color = 'text-purple-400';
+    else if (text.includes('Bitrix') || text.includes('bitrix')) color = 'text-cyan-400';
+
+    if (historical) color += ' opacity-60';
+
+    div.className += ` ${color}`;
+    div.textContent = text;
+    container.appendChild(div);
+
+    while (container.children.length > 500) {
+        container.removeChild(container.firstChild);
+    }
+
+    if (autoScroll) {
+        const logContainer = document.getElementById('log-container');
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+}
+
+// ========== DATE RANGE ==========
+
+function setDateRange(days) {
+    const toInput = document.getElementById('filter-to');
+    const fromInput = document.getElementById('filter-from');
+    const today = new Date().toISOString().split('T')[0];
+    toInput.value = today;
+
+    if (days === 0) {
+        fromInput.value = '';
+        toInput.value = '';
+    } else {
+        const from = new Date();
+        from.setDate(from.getDate() - days);
+        fromInput.value = from.toISOString().split('T')[0];
+    }
+    loadReclamations();
+}
+
+// Escape HTML
+function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

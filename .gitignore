@@ -1,0 +1,21 @@
+# Attachments (downloaded email attachments - large files)
+attachments/
+
+# Logs
+*.log
+
+# Cache
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# Processing state (recreated automatically)
+processed_reclamations.json
+processing_results.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
